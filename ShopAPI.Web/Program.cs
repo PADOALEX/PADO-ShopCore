@@ -13,17 +13,12 @@ using ShopAPI.Web.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var jwtKey = builder.Configuration["Jwt:Key"];
-var issuer = builder.Configuration["Jwt:Issuer"];
-var audience = builder.Configuration["Jwt:Audience"];
-if (string.IsNullOrEmpty(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32 ||
-    string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
-    throw new InvalidOperationException("Set Jwt__Key (at least 32 UTF-8 bytes), Jwt__Issuer and Jwt__Audience in environment variables.");
-if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("DefaultConnection")))
-    throw new InvalidOperationException("Set ConnectionStrings__DefaultConnection environment variable.");
-
-builder.Services.AddDbContext<ShopDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// WebApplicationFactory adds per-test configuration after the top-level Program body begins.
+// Resolve final runtime configuration from DI, not from these early startup statements.
+builder.Services.AddHostedService<StartupConfigurationValidator>();
+builder.Services.AddDbContext<ShopDbContext>((services, options) =>
+    options.UseNpgsql(services.GetRequiredService<IConfiguration>()
+        .GetConnectionString("DefaultConnection")));
 builder.Services.AddScoped<CartService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<RefundService>();
@@ -44,21 +39,27 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-{
-    options.MapInboundClaims = false;
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IConfiguration>((options, configuration) =>
     {
-        ValidateIssuer = true, ValidIssuer = issuer,
-        ValidateAudience = true, ValidAudience = audience,
-        ValidateLifetime = true, RequireExpirationTime = true,
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-        NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
-        RoleClaimType = System.Security.Claims.ClaimTypes.Role,
-        ClockSkew = TimeSpan.FromSeconds(30)
-    };
-});
+        // Options are configured with the final DI configuration,
+        // including overrides supplied by WebApplicationFactory.
+        StartupConfigurationValidator.Validate(configuration);
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true, ValidIssuer = configuration["Jwt:Issuer"],
+            ValidateAudience = true, ValidAudience = configuration["Jwt:Audience"],
+            ValidateLifetime = true, RequireExpirationTime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!)),
+            NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
