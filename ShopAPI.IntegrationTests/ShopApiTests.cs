@@ -130,7 +130,10 @@ public sealed class ShopApiTests
         }
         var responses = await Task.WhenAll(env.Client.SendAsync(Request(tokenA)), env.Client.SendAsync(Request(tokenB)));
         Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Created));
-        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.Conflict));
+        Assert.True(responses.Count(r => r.StatusCode == HttpStatusCode.Conflict) == 1,
+            "Expected exactly one HTTP 409. Actual responses: " +
+            string.Join(", ", await Task.WhenAll(responses.Select(async response =>
+                $"{(int)response.StatusCode} {response.StatusCode}: {await response.Content.ReadAsStringAsync()}"))));
         using var scope = env.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ShopDbContext>();
         Assert.Equal(0, (await db.Products.AsNoTracking().SingleAsync(p => p.Id == productId)).StockQuantity);
