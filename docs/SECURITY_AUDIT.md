@@ -42,6 +42,6 @@ Before upgrading valuable legacy data: take a tested PostgreSQL backup, clone it
 
 ## Verification status
 
-GitHub Actions successfully completed .NET 10 Release build, **8/8 unit tests**, **9/9 PostgreSQL integration tests**, and API publish on 18 October 2026: [verified run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39117326249). Current CI also checks optional Docker image construction and additional edge cases; see the live GitHub Actions status for newly pushed changes.
+GitHub Actions successfully completed .NET 10 Release build, **8/8 unit tests**, **12/12 PostgreSQL integration tests**, API publish, and **Docker image build** on 18 October 2026: [verified run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39118258465). The expanded tests cover concurrent promotional checkouts and competing refund requests. The container was built, not deployed or runtime smoke-tested.
 
 These tests do not establish independently audited production security, historical migration data preservation, or a deployed service. PostgreSQL and Docker do not need to be installed on a contributor's Windows PC when using GitHub Actions.

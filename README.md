@@ -213,7 +213,7 @@ Integration checks cover: role elevation prevention, password hash exclusion, an
 
 ### Verification status
 
-**Verified on GitHub Actions (18 October 2026):** .NET 10 restore, Release build, 8/8 unit tests, 9/9 real PostgreSQL integration tests, and API publish **all succeeded**. Expanded regression checks and Docker image verification are also part of CI; use the current badge for their latest status. [View the successful CI run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39117243394).
+**Verified on GitHub Actions (18 October 2026):** .NET 10 restore, Release build, **8/8 unit tests**, **12/12 real PostgreSQL integration tests**, API publish, and Docker image build **all succeeded**. Tests include simultaneous last-item checkout, single-use promotion races, competing refund claims, and access-control checks. [View the verified CI run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39118258465).
 
 The PostgreSQL tests use disposable databases on a GitHub-hosted runner. Docker and PostgreSQL are **not required on your own computer** to obtain this CI verification. Local database startup and production deployment have not been separately tested; this repository remains a portfolio demonstration, not an audited production commerce service.
 
