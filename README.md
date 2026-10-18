@@ -4,7 +4,7 @@
 
 **ASP.NET Core 10 E-commerce REST API** · PostgreSQL · EF Core 10 · JWT RBAC · transactional inventory · xUnit
 
-PADO ShopCore is a portfolio-focused backend for an online electronics store, evolved from an existing `ShopProject` codebase. It models a product catalog, authenticated carts, orders, promotional pricing, inventory reservations at checkout, order lifecycle transitions, and inventory-only returns. The original four EF Core migrations remain in history, with one additive integrity migration.
+PADO ShopCore is a portfolio-focused backend for an online electronics store, evolved from an existing `ShopProject` codebase. It models a product catalog, authenticated carts, orders, promotional pricing, inventory deduction at checkout, order lifecycle transitions, and inventory-only returns. The original four EF Core migrations remain in history, with one additive integrity migration.
 
 > **Scope:** This is a backend demonstration, not a payment gateway or production commerce deployment. The `Paid` status is set by a privileged operator; no real money moves in this application. See [limitations](#known-limitations).
 
@@ -83,7 +83,7 @@ dotnet run --project ShopAPI.Web --launch-profile http -- --migrate
 dotnet run --project ShopAPI.Web --launch-profile http -- --seed-demo
 ```
 
-`--migrate` and `--seed-demo` run as **one-shot commands** and exit. Demo seed loads the original 10 categories / 50 example products only if the catalog is empty; it will never delete existing records. Do not run the seed command in non-Development environments.
+`--migrate` and `--seed-demo` run as **one-shot commands** and exit. Demo seed loads the original 10 categories / 50 example products only if the catalog is empty; it will never delete existing records. Non-Development seed attempts are rejected **before any database migration**.
 
 **4. Create the first administrator (optional; one-time)**
 
@@ -209,13 +209,20 @@ Remove-Item Env:TEST_POSTGRES_CONNECTION
 dotnet test ShopAPI.slnx -c Release
 ```
 
-Integration checks cover: role elevation prevention, password hash exclusion, anonymous/forbidden endpoints, duplicate email, forged customer IDs and order ownership, invalid input, concurrent purchases of the last inventory unit, and duplicate refund/restock prevention. The GitHub Actions job uses a short-lived PostgreSQL service with **CI-only trust authentication** on the isolated runner and never reuses that setting in `compose.yaml`.
+Integration checks cover: role elevation prevention, password hash exclusion, anonymous/forbidden endpoints, duplicate email, forged customer IDs and order ownership, invalid input, concurrent purchases of the last inventory unit, duplicate refund/restock prevention, single-use promotion limits, competing return requests and forbidden administrative stock changes. The GitHub Actions job uses a short-lived PostgreSQL service with **CI-only trust authentication** on the isolated runner and never reuses that setting in `compose.yaml`.
 
 ### Verification status
 
-**Verified on GitHub Actions (18 October 2026):** .NET 10 restore, Release build, 8/8 unit tests, 9/9 real PostgreSQL integration tests, and API publish **all succeeded**. [View the successful CI run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39117243394).
+**Verified on GitHub Actions (18 October 2026):** .NET 10 restore, Release build, 8/8 unit tests, 9/9 real PostgreSQL integration tests, and API publish **all succeeded**. Expanded regression checks and Docker image verification are also part of CI; use the current badge for their latest status. [View the successful CI run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39117243394).
 
 The PostgreSQL tests use disposable databases on a GitHub-hosted runner. Docker and PostgreSQL are **not required on your own computer** to obtain this CI verification. Local database startup and production deployment have not been separately tested; this repository remains a portfolio demonstration, not an audited production commerce service.
+
+## CI and security notes
+
+- CI uses an **ephemeral PostgreSQL service** and isolated temporary databases; it does not need local PostgreSQL/Docker.
+- CI builds the published ASP.NET Core application and an optional Docker image. No image is pushed to a registry and no public deployment is claimed.
+- The repository documents previously found issues in [Security Audit](docs/SECURITY_AUDIT.md); legacy migration upgrades remain a separate operation.
+- Green tests validate selected security and transaction invariants, **not** every attack or deployment scenario.
 
 ## Screenshots
 
@@ -229,7 +236,7 @@ The API has no graphical front end. Actual Swagger UI screenshots may be placed 
 - Inventory decrements at checkout (there is no pre-checkout reservation timeout). Cancel only before Paid; returns only after Delivered.
 - Customer self-service is limited to cart/order/refund workflows; product/category writes and returns decisions are Admin-only.
 - Pagination is intentionally basic; no comprehensive filtering/search, order history audit trail or observability stack.
-- Historical DB migrations may fail against inconsistent legacy data. Back up and run the preflight described in [SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) before upgrading an existing database.
+- **Legacy migration warning:** an original migration drops the old `Customers` table. A fresh database is verified in CI, but upgrading a database created before the authentication schema requires a tested, application-specific data preservation plan. Never run this historical migration against valuable data without a backup and restoration rehearsal. See [SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md).
 - Connection strings are injected via configuration rather than embedded in source. This project has not undergone independent penetration testing.
 
 ## License

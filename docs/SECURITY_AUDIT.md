@@ -34,6 +34,14 @@ The previous migrations are intentionally retained. The additive `SecurityAndInt
 - Idempotency keys are not implemented; client retries after ambiguous network failures should first fetch their orders. Order operations aren't claimed to be externally exactly-once.
 - The code is a portfolio sample, **not** an independently security-audited production commerce platform.
 
-## Verification availability
+## Legacy migration warning (high priority)
 
-`dotnet` and `docker` executables were not installed in the execution environment used to prepare this repository, and outbound DNS resolution was unavailable. No successful .NET build, test run, migration run, or HTTP runtime check is claimed. See CI workflow and README for repeatable verification.
+The historical migration `20260506165426_AddAuthDiscountsRefunds` drops the old `Customers` table and replaces it with `User`. **This is not a lossless migration of pre-authentication customer records.** Do not apply the old migration to a populated legacy database without a bespoke plan to map or archive customer identities and re-establish correct foreign keys.
+
+Before upgrading valuable legacy data: take a tested PostgreSQL backup, clone it into a disposable environment, review all historical migration operations, design explicit mapping for old customer IDs and associated carts/orders, execute the migration plan against the clone, and validate counts and ownership relationships. The project's automated integration tests deliberately use **fresh empty databases**, so they do not claim legacy upgrade safety.
+
+## Verification status
+
+GitHub Actions successfully completed .NET 10 Release build, **8/8 unit tests**, **9/9 PostgreSQL integration tests**, and API publish on 18 October 2026: [verified run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39117326249). Current CI also checks optional Docker image construction and additional edge cases; see the live GitHub Actions status for newly pushed changes.
+
+These tests do not establish independently audited production security, historical migration data preservation, or a deployed service. PostgreSQL and Docker do not need to be installed on a contributor's Windows PC when using GitHub Actions.

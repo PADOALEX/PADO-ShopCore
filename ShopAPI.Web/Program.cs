@@ -87,6 +87,10 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
+// Never let an invalid demo-seed command modify a non-development database.
+if (args.Contains("--seed-demo") && !app.Environment.IsDevelopment())
+    throw new InvalidOperationException("Demo seeding is restricted to Development.");
+
 if (args.Contains("--migrate") || args.Contains("--bootstrap-admin") || args.Contains("--seed-demo"))
 {
     using var scope = app.Services.CreateScope();
@@ -110,8 +114,6 @@ if (args.Contains("--migrate") || args.Contains("--bootstrap-admin") || args.Con
     }
     if (args.Contains("--seed-demo"))
     {
-        if (!app.Environment.IsDevelopment())
-            throw new InvalidOperationException("Demo seeding is restricted to Development.");
         await DemoSeeder.SeedAsync(db);
         Console.WriteLine("Demo catalog seeded without deleting existing records.");
     }

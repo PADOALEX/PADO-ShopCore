@@ -234,4 +234,121 @@ public sealed class ShopApiTests
         using var check = env.Services.CreateScope();
         Assert.Equal(1, (await check.ServiceProvider.GetRequiredService<ShopDbContext>().Products.SingleAsync(x => x.Id == productId)).StockQuantity);
     }
+
+    [Fact]
+    public async Task ConcurrentCheckoutWithSingleUsePromoCannotExceedUsageLimit()
+    {
+        await using var env = await PgScenario.StartAsync();
+        var productId = await AddProduct(env, stock: 2);
+        using (var scope = env.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ShopDbContext>();
+            db.PromoCodes.Add(new PromoCode
+            {
+                Code = "ONLYONCE", DiscountPercentage = 10m,
+                ExpirationDate = DateTime.UtcNow.AddDays(1),
+                IsActive = true, MaxUsages = 1
+            });
+            await db.SaveChangesAsync();
+        }
+        var (_, tokenA) = await RegisterAndLogin(env.Client);
+        var (_, tokenB) = await RegisterAndLogin(env.Client);
+        foreach (var jwt in new[] { tokenA, tokenB })
+        {
+            using var add = new HttpRequestMessage(HttpMethod.Post, "/api/carts/add-item")
+            { Content = JsonContent.Create(new { productId, quantity = 1 }) };
+            add.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+            Assert.Equal(HttpStatusCode.OK, (await env.Client.SendAsync(add)).StatusCode);
+        }
+        async Task<HttpResponseMessage> Checkout(string jwt)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/orders/checkout")
+            { Content = JsonContent.Create(new { promoCode = "ONLYONCE" }) };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+            return await env.Client.SendAsync(request);
+        }
+        using var first = await Checkout(tokenA);
+        // Second checkout is also a valid use-limit check if the first completed already.
+        using var second = await Checkout(tokenB);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        using var verify = env.Services.CreateScope();
+        var check = verify.ServiceProvider.GetRequiredService<ShopDbContext>();
+        Assert.Equal(1, (await check.PromoCodes.SingleAsync(x => x.Code == "ONLYONCE")).CurrentUsages);
+        Assert.Equal(1, (await check.Products.SingleAsync(x => x.Id == productId)).StockQuantity);
+        Assert.Equal(1, await check.Orders.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConcurrentRefundRequestsCannotOverclaimSamePurchasedItems()
+    {
+        await using var env = await PgScenario.StartAsync();
+        var productId = await AddProduct(env, stock: 2);
+        var (_, customerToken) = await RegisterAndLogin(env.Client);
+        using (var scope = env.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ShopDbContext>();
+            db.Users.Add(new User
+            {
+                Email = "admin.refunds@test.invalid", FirstName = "Admin", LastName = "Tester",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("StrongTestPassword#2026"),
+                Role = Role.Admin
+            });
+            await db.SaveChangesAsync();
+        }
+        var adminLogin = await env.Client.PostAsJsonAsync("/api/auth/login", new
+        { email = "admin.refunds@test.invalid", password = "StrongTestPassword#2026" });
+        Assert.Equal(HttpStatusCode.OK, adminLogin.StatusCode);
+        var adminToken = (await adminLogin.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("token").GetString()!;
+        As(env.Client, customerToken);
+        Assert.Equal(HttpStatusCode.OK, (await env.Client.PostAsJsonAsync("/api/carts/add-item",
+            new { productId, quantity = 2 })).StatusCode);
+        var checkout = await env.Client.PostAsJsonAsync("/api/orders/checkout", new { });
+        Assert.Equal(HttpStatusCode.Created, checkout.StatusCode);
+        var order = await checkout.Content.ReadFromJsonAsync<JsonElement>();
+        var orderId = order.GetProperty("id").GetInt32();
+        var lineId = order.GetProperty("items")[0].GetProperty("id").GetInt32();
+        As(env.Client, adminToken);
+        foreach (var status in new[] { OrderStatus.Paid, OrderStatus.Shipped, OrderStatus.Delivered })
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await env.Client.PatchAsJsonAsync($"/api/orders/{orderId}/status", new { status })).StatusCode);
+
+        async Task<HttpResponseMessage> SubmitRefund()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/refunds/request")
+            { Content = JsonContent.Create(new { orderId, items = new[] { new { orderItemId = lineId, quantity = 2 } } }) };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", customerToken);
+            return await env.Client.SendAsync(request);
+        }
+        var responses = await Task.WhenAll(SubmitRefund(), SubmitRefund());
+        try
+        {
+            Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.Created));
+            Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.Conflict));
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
+        using var verify = env.Services.CreateScope();
+        var check = verify.ServiceProvider.GetRequiredService<ShopDbContext>();
+        Assert.Equal(1, await check.RefundRequests.CountAsync());
+        Assert.Equal(2, await check.RefundItems.SumAsync(x => x.Quantity));
+        Assert.Equal(0, (await check.Products.SingleAsync(x => x.Id == productId)).StockQuantity);
+    }
+
+    [Fact]
+    public async Task InvalidAdminStockChangeIsRejectedWithoutModifyingProduct()
+    {
+        await using var env = await PgScenario.StartAsync();
+        var productId = await AddProduct(env, stock: 3);
+        var (_, token) = await RegisterAndLogin(env.Client);
+        As(env.Client, token);
+        Assert.Equal(HttpStatusCode.Forbidden, (await env.Client.PutAsJsonAsync($"/api/products/{productId}",
+            new { name = "Tampered", price = 1, stockQuantity = 99, isActive = true, categoryId = 1 })).StatusCode);
+        using var verify = env.Services.CreateScope();
+        var check = verify.ServiceProvider.GetRequiredService<ShopDbContext>();
+        Assert.Equal(3, (await check.Products.AsNoTracking().SingleAsync(x => x.Id == productId)).StockQuantity);
+    }
 }
