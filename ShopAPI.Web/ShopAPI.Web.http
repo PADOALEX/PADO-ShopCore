@@ -1,0 +1,46 @@
+@host = http://localhost:5000
+@token = REPLACE_WITH_LOGIN_JWT
+
+### Liveness
+GET {{host}}/health
+
+### Public product catalog
+GET {{host}}/api/products?page=1&pageSize=20
+
+### Register (regular User only)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "Alex",
+  "lastName": "Example",
+  "email": "alex@example.test",
+  "password": "A-Long-Unique-Password#2026"
+}
+
+### Login (copy token into @token)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "alex@example.test",
+  "password": "A-Long-Unique-Password#2026"
+}
+
+### My cart
+GET {{host}}/api/carts
+Authorization: Bearer {{token}}
+
+### Add item
+POST {{host}}/api/carts/add-item
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"productId":1,"quantity":1}
+
+### Checkout
+POST {{host}}/api/orders/checkout
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"promoCode":null}

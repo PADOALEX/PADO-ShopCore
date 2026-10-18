@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="ShopAPI.Core/ShopAPI.Core.csproj" />
+  <Project Path="ShopAPI.Infrastructure/ShopAPI.Infrastructure.csproj" />
+  <Project Path="ShopAPI.IntegrationTests/ShopAPI.IntegrationTests.csproj" />
+  <Project Path="ShopAPI.UnitTests/ShopAPI.UnitTests.csproj" />
+  <Project Path="ShopAPI.Web/ShopAPI.Web.csproj" />
+</Solution>
