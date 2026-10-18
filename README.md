@@ -1,5 +1,7 @@
 # PADO ShopCore
 
+[![.NET 10 CI](https://github.com/PADOALEX/PADO-ShopCore/actions/workflows/ci.yml/badge.svg)](https://github.com/PADOALEX/PADO-ShopCore/actions/workflows/ci.yml)
+
 **ASP.NET Core 10 E-commerce REST API** · PostgreSQL · EF Core 10 · JWT RBAC · transactional inventory · xUnit
 
 PADO ShopCore is a portfolio-focused backend for an online electronics store, evolved from an existing `ShopProject` codebase. It models a product catalog, authenticated carts, orders, promotional pricing, inventory reservations at checkout, order lifecycle transitions, and inventory-only returns. The original four EF Core migrations remain in history, with one additive integrity migration.
@@ -209,9 +211,11 @@ dotnet test ShopAPI.slnx -c Release
 
 Integration checks cover: role elevation prevention, password hash exclusion, anonymous/forbidden endpoints, duplicate email, forged customer IDs and order ownership, invalid input, concurrent purchases of the last inventory unit, and duplicate refund/restock prevention. The GitHub Actions job uses a short-lived PostgreSQL service with **CI-only trust authentication** on the isolated runner and never reuses that setting in `compose.yaml`.
 
-### Verification status of this exported archive
+### Verification status
 
-**Build evidence:** On 18 October 2026, a Windows user ran the previous revision with .NET SDK 10.0.302: restore and Release build succeeded, and **8 of 8 unit tests passed**. All 9 integration tests stopped immediately because `TEST_POSTGRES_CONNECTION` was unset; they have not yet been exercised against PostgreSQL. In this follow-up revision, the `Request` name-hiding warning and EF Core version mismatch were addressed, **but this exact revision could not be recompiled or retested in the authoring environment** (no .NET SDK or Docker). Run the commands below locally before publishing. See [security audit](docs/SECURITY_AUDIT.md).
+**Verified on GitHub Actions (18 October 2026):** .NET 10 restore, Release build, 8/8 unit tests, 9/9 real PostgreSQL integration tests, and API publish **all succeeded**. [View the successful CI run](https://github.com/PADOALEX/PADO-ShopCore/actions/runs/39117243394).
+
+The PostgreSQL tests use disposable databases on a GitHub-hosted runner. Docker and PostgreSQL are **not required on your own computer** to obtain this CI verification. Local database startup and production deployment have not been separately tested; this repository remains a portfolio demonstration, not an audited production commerce service.
 
 ## Screenshots
 
