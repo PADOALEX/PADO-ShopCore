@@ -267,11 +267,17 @@ public sealed class ShopApiTests
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
             return await env.Client.SendAsync(request);
         }
-        using var first = await Checkout(tokenA);
-        // Second checkout is also a valid use-limit check if the first completed already.
-        using var second = await Checkout(tokenB);
-        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        // Fire both purchases together: at most one transaction can consume the promo.
+        var responses = await Task.WhenAll(Checkout(tokenA), Checkout(tokenB));
+        try
+        {
+            Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.Created));
+            Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.Conflict));
+        }
+        finally
+        {
+            foreach (var response in responses) response.Dispose();
+        }
         using var verify = env.Services.CreateScope();
         var check = verify.ServiceProvider.GetRequiredService<ShopDbContext>();
         Assert.Equal(1, (await check.PromoCodes.SingleAsync(x => x.Code == "ONLYONCE")).CurrentUsages);
